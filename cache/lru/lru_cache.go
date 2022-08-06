@@ -26,20 +26,18 @@ type LruCache[T any] struct {
 	cleanInterval time.Duration
 }
 
-func NewCache[T any](n int, interval time.Duration) *LruCache[T] {
+func NewCache[T any](n int, cleanInterval time.Duration) *LruCache[T] {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &LruCache[T]{
 		cap:           n,
 		items:         make([]*item[T], 0),
 		ctx:           ctx,
 		cancel:        cancel,
-		cleanInterval: interval,
+		cleanInterval: cleanInterval,
 	}
 	go clean(c)
 	return c
 }
-
-const cleanDuration = 1 * time.Second
 
 func clean[T any](c *LruCache[T]) {
 	ontick := func(tick time.Time) {
@@ -87,7 +85,7 @@ func clean[T any](c *LruCache[T]) {
 		c.items = output
 	}
 
-	ticker := time.NewTicker(cleanDuration)
+	ticker := time.NewTicker(c.cleanInterval)
 	for {
 		select {
 		case tick := <-ticker.C:
