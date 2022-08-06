@@ -127,7 +127,7 @@ func (c *LruCache[T]) Get(key string) (T, bool) {
 		return zero, false
 	}
 
-	at, e := exits(key, c)
+	at, e := exists(key, c)
 	if !e {
 		var zero T
 		return zero, false
@@ -140,7 +140,7 @@ func (c *LruCache[T]) Get(key string) (T, bool) {
 	return item.Val, true
 }
 
-func exits[T any](key string, c *LruCache[T]) (int, bool) {
+func exists[T any](key string, c *LruCache[T]) (int, bool) {
 	var compare utils.CompareFunc[*item[T]] = func(x *item[T]) bool {
 		return x.Key == key
 	}
@@ -151,7 +151,7 @@ func exits[T any](key string, c *LruCache[T]) (int, bool) {
 func (c *LruCache[T]) Put(key string, val T) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	at, e := exits(key, c)
+	at, e := exists(key, c)
 	if e {
 		item := c.items[at]
 		item.UsedAt = time.Now()
