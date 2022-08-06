@@ -4,4 +4,5 @@ use (
 	./cache
 	./prefix-tree
 	./gget
+	./utils
 )

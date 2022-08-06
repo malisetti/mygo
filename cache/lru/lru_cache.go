@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sync"
 	"time"
+	"utils"
 )
 
 type item[T any] struct {
@@ -140,40 +141,11 @@ func (c *LruCache[T]) Get(key string) (T, bool) {
 }
 
 func exits[T any](key string, c *LruCache[T]) (int, bool) {
-	n := len(c.items)
-	if n == 0 {
-		return 0, false
+	var compare utils.CompareFunc[*item[T]] = func(x *item[T]) bool {
+		return x.Key == key
 	}
-	size := int(math.Ceil(float64(n) / float64(runtime.NumCPU())))
-	slices := int(math.Ceil(float64(n) / float64(size)))
-	result := make(chan *int, slices)
-	var j int
-	for i := 0; i < n; i += size {
-		j += size
-		if j > n {
-			j = n
-		}
-		go func(x, y int) {
-			cpart := c.items[x:y]
-			for i := 0; i < len(cpart); i++ {
-				at := i
-				e := cpart[at]
-				if e.Key == key {
-					exitsAt := x + at
-					result <- &exitsAt
-					return
-				}
-			}
-			result <- nil
-		}(i, j)
-	}
-	for i := 0; i < slices; i++ {
-		v := <-result
-		if v != nil {
-			return *v, true
-		}
-	}
-	return 0, false
+
+	return utils.ExistsAt(c.items, compare)
 }
 
 func (c *LruCache[T]) Put(key string, val T) {
