@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func TestCacheGet(t *testing.T) {
+func TestCache(t *testing.T) {
 	type testcase struct {
 		key, val string
 	}
@@ -57,7 +57,7 @@ func TestCacheGet(t *testing.T) {
 		}
 	})
 
-	t.Run("", func(t *testing.T) {
+	t.Run("test cache size", func(t *testing.T) {
 		for i := 0; i < len(testcases); i++ {
 			testcase := testcases[i]
 			cache.Put(testcase.key, testcase.val)
@@ -74,17 +74,7 @@ func TestCacheGet(t *testing.T) {
 	})
 }
 
-func TestCachePut(t *testing.T) {
-
-}
-
-func BenchmarkGet(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-
-	}
-}
-
-func BenchmarkPut(b *testing.B) {
+func BenchmarkCache(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 
 	}

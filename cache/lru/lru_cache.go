@@ -41,7 +41,7 @@ func NewCache[K constraints.Ordered, V any](cacheSize int, cacheItemTtl time.Dur
 		cleanCancel:   cancel,
 		cleanInterval: cleanInterval,
 	}
-	// go clean(c)
+	go clean(c)
 	return c
 }
 
