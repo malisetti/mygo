@@ -9,29 +9,31 @@ import (
 	"sync"
 	"time"
 	"utils"
+
+	"golang.org/x/exp/constraints"
 )
 
-type item[T any] struct {
-	Key    string
-	Val    T
+type item[K constraints.Ordered, V any] struct {
+	Key    K
+	Val    V
 	UsedAt time.Time
 }
 
-type LruCache[T any] struct {
+type LruCache[K constraints.Ordered, V any] struct {
 	mu     sync.Mutex
 	ctx    context.Context
 	cancel context.CancelFunc
 
 	cap           int
-	items         []*item[T]
+	items         []*item[K, V]
 	cleanInterval time.Duration
 }
 
-func NewCache[T any](n int, cleanInterval time.Duration) *LruCache[T] {
+func NewCache[K constraints.Ordered, V any](n int, cleanInterval time.Duration) *LruCache[K, V] {
 	ctx, cancel := context.WithCancel(context.Background())
-	c := &LruCache[T]{
+	c := &LruCache[K, V]{
 		cap:           n,
-		items:         make([]*item[T], 0),
+		items:         make([]*item[K, V], 0),
 		ctx:           ctx,
 		cancel:        cancel,
 		cleanInterval: cleanInterval,
@@ -40,7 +42,7 @@ func NewCache[T any](n int, cleanInterval time.Duration) *LruCache[T] {
 	return c
 }
 
-func clean[T any](c *LruCache[T]) {
+func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 	ontick := func(tick time.Time) {
 		c.mu.Lock()
 		defer c.mu.Unlock()
@@ -55,7 +57,7 @@ func clean[T any](c *LruCache[T]) {
 		}
 		size := int(math.Ceil(float64(n) / float64(runtime.NumCPU())))
 		cparts := int(math.Ceil(float64(n) / float64(size)))
-		newCacheItems := make([][]*item[T], cparts)
+		newCacheItems := make([][]*item[K, V], cparts)
 		var j int
 		var wg sync.WaitGroup
 		for i := 0; i < n; i += size {
@@ -66,7 +68,7 @@ func clean[T any](c *LruCache[T]) {
 			wg.Add(1)
 			go func(x, y int) {
 				defer wg.Done()
-				var cpart []*item[T]
+				var cpart []*item[K, V]
 				copy(cpart, c.items[x:y])
 				for i := 0; i < len(cpart); i++ {
 					e := cpart[i]
@@ -79,7 +81,7 @@ func clean[T any](c *LruCache[T]) {
 			}(i, j)
 		}
 		wg.Wait()
-		var output []*item[T]
+		var output []*item[K, V]
 		for _, v := range newCacheItems {
 			output = append(output, v...)
 		}
@@ -97,11 +99,11 @@ func clean[T any](c *LruCache[T]) {
 	}
 }
 
-func (c *LruCache[T]) PauseCleaning() {
+func (c *LruCache[K, T]) PauseCleaning() {
 	c.cancel()
 }
 
-func (c *LruCache[T]) ResumeCleaning() {
+func (c *LruCache[K, T]) ResumeCleaning() {
 	if c.ctx.Err() == nil {
 		return
 	}
@@ -112,12 +114,12 @@ func (c *LruCache[T]) ResumeCleaning() {
 	go clean(c)
 }
 
-func (c *LruCache[T]) String() string {
+func (c *LruCache[K, T]) String() string {
 	buf, _ := json.Marshal(c.items)
 	return string(buf)
 }
 
-func (c *LruCache[T]) Get(key string) (T, bool) {
+func (c *LruCache[K, T]) Get(key K) (T, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -140,15 +142,14 @@ func (c *LruCache[T]) Get(key string) (T, bool) {
 	return item.Val, true
 }
 
-func exists[T any](key string, c *LruCache[T]) (int, bool) {
-	var compare utils.CompareFunc[*item[T]] = func(x *item[T]) bool {
+func exists[K constraints.Ordered, V any](key K, c *LruCache[K, V]) (int, bool) {
+	var compareFunc utils.CompareFunc[*item[K, V]] = func(x *item[K, V]) bool {
 		return x.Key == key
 	}
-
-	return utils.ExistsAt(c.items, compare)
+	return utils.ExistsAt(c.items, compareFunc)
 }
 
-func (c *LruCache[T]) Put(key string, val T) {
+func (c *LruCache[K, T]) Put(key K, val T) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	at, e := exists(key, c)
@@ -158,7 +159,7 @@ func (c *LruCache[T]) Put(key string, val T) {
 		c.items = append(c.items[:at], c.items[at+1:]...)
 		c.items = append(c.items, item)
 	} else {
-		item := &item[T]{
+		item := &item[K, T]{
 			key,
 			val,
 			time.Now(),
