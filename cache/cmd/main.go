@@ -18,7 +18,7 @@ func randSeq(n int) string {
 }
 
 func main() {
-	cache := lru.NewCache[string, string](10, 10*time.Second, 1*time.Second)
+	cache := lru.NewCache[string, string](10, 10*time.Second)
 	cache.Put("foo", "bar")
 	cache.Put("john", "doe")
 	cache.Put("john1", "doe")

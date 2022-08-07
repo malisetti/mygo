@@ -20,30 +20,30 @@ type item[K constraints.Ordered, V any] struct {
 }
 
 type LruCache[K constraints.Ordered, V any] struct {
-	mu            sync.Mutex
-	cleanCtx      context.Context
-	cleanCancel   context.CancelFunc
-	cleanInterval time.Duration
+	mu          sync.Mutex
+	cleanCtx    context.Context
+	cleanCancel context.CancelFunc
 
 	cap   int
 	items []*item[K, V]
 	ttl   time.Duration
 }
 
-func NewCache[K constraints.Ordered, V any](cacheSize int, cacheItemTtl time.Duration, cleanInterval time.Duration) *LruCache[K, V] {
+func NewCache[K constraints.Ordered, V any](cacheSize int, cacheItemTtl time.Duration) *LruCache[K, V] {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &LruCache[K, V]{
 		cap:   cacheSize,
-		items: make([]*item[K, V], 0, cacheSize),
+		items: make([]*item[K, V], 0),
 		ttl:   cacheItemTtl,
 
-		cleanCtx:      ctx,
-		cleanCancel:   cancel,
-		cleanInterval: cleanInterval,
+		cleanCtx:    ctx,
+		cleanCancel: cancel,
 	}
 	go clean(c)
 	return c
 }
+
+const cleanInterval = 1 * time.Second
 
 func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 	ontick := func(tick time.Time) {
@@ -93,7 +93,7 @@ func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 		c.items = output
 	}
 
-	ticker := time.NewTicker(c.cleanInterval)
+	ticker := time.NewTicker(cleanInterval)
 	for {
 		select {
 		case tick := <-ticker.C:
