@@ -2,7 +2,6 @@ package lru
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"runtime"
@@ -184,9 +183,4 @@ func (c *LruCache[K, T]) Put(key K, val T) {
 	} else {
 		c.items = append(c.items, item) // if capacity is not full, append the item
 	}
-}
-
-func (c *LruCache[K, T]) Display() {
-	buf, _ := json.Marshal(c.items)
-	fmt.Println(string(buf))
 }
