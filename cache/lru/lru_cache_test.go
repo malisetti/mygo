@@ -100,7 +100,6 @@ func BenchmarkCache(b *testing.B) {
 		rand.Seed(time.Now().UnixMilli())
 		k, v := randSeq(5), randSeq(5)
 		lruCache.Put(k, v)
-		time.Sleep(300 * time.Millisecond)
 	}
 	lruCache.Put("foo1", "bar1")
 	val, ok := lruCache.Get("foo1")
@@ -114,5 +113,9 @@ func BenchmarkCache(b *testing.B) {
 	_, ok = lruCache.Get("foo")
 	if ok {
 		b.Errorf("key \"%s\" should not be present", "foo")
+	}
+	_, ok = lruCache.Get("foo1")
+	if ok {
+		b.Errorf("key \"%s\" should not be present", "foo1")
 	}
 }
