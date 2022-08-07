@@ -2,8 +2,6 @@ package lru
 
 import (
 	"context"
-	"encoding/json"
-	"log"
 	"math"
 	"runtime"
 	"sync"
@@ -20,22 +18,22 @@ type item[K constraints.Ordered, V any] struct {
 }
 
 type LruCache[K constraints.Ordered, V any] struct {
-	mu     sync.Mutex
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	cap           int
-	items         []*item[K, V]
+	mu            sync.Mutex
+	cleanCtx      context.Context
+	cleanCancel   context.CancelFunc
 	cleanInterval time.Duration
+
+	cap   int
+	items []*item[K, V]
 }
 
 func NewCache[K constraints.Ordered, V any](n int, cleanInterval time.Duration) *LruCache[K, V] {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &LruCache[K, V]{
 		cap:           n,
-		items:         make([]*item[K, V], 0),
-		ctx:           ctx,
-		cancel:        cancel,
+		items:         make([]*item[K, V], 0, n),
+		cleanCtx:      ctx,
+		cleanCancel:   cancel,
 		cleanInterval: cleanInterval,
 	}
 	go clean(c)
@@ -46,18 +44,13 @@ func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 	ontick := func(tick time.Time) {
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		if time.Since(tick) >= 999*time.Millisecond {
-			log.Println("could not aquire the lock in around a second")
-			return
-		}
-
 		n := len(c.items)
 		if n == 0 {
 			return
 		}
 		size := int(math.Ceil(float64(n) / float64(runtime.NumCPU())))
-		cparts := int(math.Ceil(float64(n) / float64(size)))
-		newCacheItems := make([][]*item[K, V], cparts)
+		noSlices := int(math.Ceil(float64(n) / float64(size)))
+		newCacheItems := make([][]*item[K, V], noSlices)
 		var j int
 		var wg sync.WaitGroup
 		for i := 0; i < n; i += size {
@@ -67,23 +60,31 @@ func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 			}
 			wg.Add(1)
 			go func(x, y int) {
+				if c.cleanCtx.Err() == nil {
+					return
+				}
 				defer wg.Done()
-				var cpart []*item[K, V]
-				copy(cpart, c.items[x:y])
-				for i := 0; i < len(cpart); i++ {
-					e := cpart[i]
-					at := i
+				itemSlice := make([]*item[K, V], 0, y-x)
+				copy(itemSlice, c.items[x:y])
+				for i, n := 0, len(itemSlice); i < n && c.cleanCtx.Err() != nil; i++ {
+					e := itemSlice[i]
 					if time.Since(e.UsedAt) >= c.cleanInterval {
-						cpart = append(cpart[:at], cpart[at+1:]...)
+						itemSlice = removeAt(itemSlice, i)
 					}
 				}
-				newCacheItems[int(math.Ceil(float64(x)/float64(size)))] = cpart
+				if c.cleanCtx.Err() == nil {
+					return
+				}
+				newCacheItems[int(math.Ceil(float64(x)/float64(size)))] = itemSlice
 			}(i, j)
 		}
 		wg.Wait()
 		var output []*item[K, V]
 		for _, v := range newCacheItems {
-			output = append(output, v...)
+			output = append(output, v...) // flatten the 2d items to 1d
+		}
+		if c.cleanCtx.Err() == nil {
+			return
 		}
 		c.items = output
 	}
@@ -92,31 +93,41 @@ func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 	for {
 		select {
 		case tick := <-ticker.C:
-			go ontick(tick)
-		case <-c.ctx.Done():
+			ontick(tick)
+		case <-c.cleanCtx.Done():
 			return
 		}
 	}
 }
 
+func exists[K constraints.Ordered, V any](key K, c *LruCache[K, V]) (int, bool) {
+	var compareFunc utils.CompareFunc[*item[K, V]] = func(x *item[K, V]) bool {
+		return x.Key == key
+	}
+	return utils.ExistsAt(c.items, compareFunc)
+}
+
+func removeAt[V any](xs []V, i int) []V {
+	return append(xs[:i], xs[i+1:]...)
+}
+
 func (c *LruCache[K, T]) PauseCleaning() {
-	c.cancel()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cleanCancel()
 }
 
 func (c *LruCache[K, T]) ResumeCleaning() {
-	if c.ctx.Err() == nil {
+	if c.cleanCtx.Err() == nil {
 		return
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	ctx, cancel := context.WithCancel(context.Background())
-	c.ctx = ctx
-	c.cancel = cancel
+	c.cleanCtx = ctx
+	c.cleanCancel = cancel
 
 	go clean(c)
-}
-
-func (c *LruCache[K, T]) String() string {
-	buf, _ := json.Marshal(c.items)
-	return string(buf)
 }
 
 func (c *LruCache[K, T]) Get(key K) (T, bool) {
@@ -129,45 +140,42 @@ func (c *LruCache[K, T]) Get(key K) (T, bool) {
 		return zero, false
 	}
 
-	at, e := exists(key, c)
-	if !e {
-		var zero T
-		return zero, false
+	if at, doesexist := exists(key, c); doesexist {
+		item := c.items[at]
+		c.items = removeAt(c.items, at)
+		if c.cleanCtx.Err() != nil && time.Since(item.UsedAt) >= c.cleanInterval {
+			// remove the item because it is older and cleaning is going on
+			var zero T
+			return zero, false
+		}
+		item.UsedAt = time.Now() // update the item's used at to now and add it back to the items
+		c.items = append(c.items, item)
+		return item.Val, true
 	}
-	item := c.items[at]
-	c.items = append(c.items[:at], c.items[at+1:]...)
-	item.UsedAt = time.Now()
-	c.items = append(c.items, item)
-
-	return item.Val, true
-}
-
-func exists[K constraints.Ordered, V any](key K, c *LruCache[K, V]) (int, bool) {
-	var compareFunc utils.CompareFunc[*item[K, V]] = func(x *item[K, V]) bool {
-		return x.Key == key
-	}
-	return utils.ExistsAt(c.items, compareFunc)
+	var zero T
+	return zero, false
 }
 
 func (c *LruCache[K, T]) Put(key K, val T) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	at, e := exists(key, c)
-	if e {
+	if at, doesexist := exists(key, c); doesexist {
 		item := c.items[at]
-		item.UsedAt = time.Now()
-		c.items = append(c.items[:at], c.items[at+1:]...)
-		c.items = append(c.items, item)
+		c.items = removeAt(c.items, at) // remove from index at
+		item.UsedAt = time.Now()        // update the used at for the accessed item
+		c.items = append(c.items, item) // append the removed item to the items so it becomes the last one
+		return
+	}
+
+	// create new item to put it in the items
+	item := &item[K, T]{
+		key,
+		val,
+		time.Now(),
+	}
+	if len(c.items) == c.cap { // if the capacity is reached the specified limit, remove the first(zero'th) item and append the new item
+		c.items = append(removeAt(c.items, 0), item)
 	} else {
-		item := &item[K, T]{
-			key,
-			val,
-			time.Now(),
-		}
-		if len(c.items) == c.cap {
-			c.items = append(c.items[1:], item)
-		} else {
-			c.items = append(c.items, item)
-		}
+		c.items = append(c.items, item) // if capacity is not full, append the item
 	}
 }
