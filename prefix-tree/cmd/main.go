@@ -7,13 +7,16 @@ import (
 )
 
 func main() {
-	trie := prefixtree.NewTrie()
+	trie := prefixtree.NewTrie[rune]()
 
 	for _, fruit := range fruits {
-		trie.Insert(fruit)
+		trie.Insert([]rune(fruit))
 	}
 
 	fmt.Printf("digraph trie {\n")
-	prefixtree.DumpDot('_', trie)
+	var stringRep prefixtree.StringRep[rune] = func(r rune) string {
+		return string(r)
+	}
+	prefixtree.DumpDot('_', trie, stringRep)
 	fmt.Printf("}\n")
 }
