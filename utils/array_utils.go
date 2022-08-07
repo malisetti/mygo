@@ -25,7 +25,7 @@ func ExistsAt[T any](xs []T, compare CompareFunc[T]) (int, bool) {
 		}
 		go func(x, y int) {
 			cpart := xs[x:y]
-			for i, n := 0, len(cpart); i < n && ctx.Err() != nil; i++ {
+			for i, n := 0, len(cpart); i < n && ctx.Err() == nil; i++ {
 				e := cpart[i]
 				if compare(e) {
 					exitsAt := x + i

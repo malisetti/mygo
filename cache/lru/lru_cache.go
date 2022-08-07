@@ -2,6 +2,8 @@ package lru
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"math"
 	"runtime"
 	"sync"
@@ -25,18 +27,21 @@ type LruCache[K constraints.Ordered, V any] struct {
 
 	cap   int
 	items []*item[K, V]
+	ttl   time.Duration
 }
 
-func NewCache[K constraints.Ordered, V any](n int, cleanInterval time.Duration) *LruCache[K, V] {
+func NewCache[K constraints.Ordered, V any](cacheSize int, cacheItemTtl time.Duration, cleanInterval time.Duration) *LruCache[K, V] {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &LruCache[K, V]{
-		cap:           n,
-		items:         make([]*item[K, V], 0, n),
+		cap:   cacheSize,
+		items: make([]*item[K, V], 0, cacheSize),
+		ttl:   cacheItemTtl,
+
 		cleanCtx:      ctx,
 		cleanCancel:   cancel,
 		cleanInterval: cleanInterval,
 	}
-	go clean(c)
+	// go clean(c)
 	return c
 }
 
@@ -60,15 +65,14 @@ func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 			}
 			wg.Add(1)
 			go func(x, y int) {
+				defer wg.Done()
 				if c.cleanCtx.Err() == nil {
 					return
 				}
-				defer wg.Done()
-				itemSlice := make([]*item[K, V], 0, y-x)
+				itemSlice := make([]*item[K, V], 0)
 				copy(itemSlice, c.items[x:y])
-				for i, n := 0, len(itemSlice); i < n && c.cleanCtx.Err() != nil; i++ {
-					e := itemSlice[i]
-					if time.Since(e.UsedAt) >= c.cleanInterval {
+				for i, n := 0, len(itemSlice); i < n && c.cleanCtx.Err() == nil; i++ {
+					if time.Since(itemSlice[i].UsedAt) >= c.ttl {
 						itemSlice = removeAt(itemSlice, i)
 					}
 				}
@@ -140,10 +144,12 @@ func (c *LruCache[K, T]) Get(key K) (T, bool) {
 		return zero, false
 	}
 
-	if at, doesexist := exists(key, c); doesexist {
+	at, doesexist := exists(key, c)
+	fmt.Println(at, doesexist, key)
+	if doesexist {
 		item := c.items[at]
 		c.items = removeAt(c.items, at)
-		if c.cleanCtx.Err() != nil && time.Since(item.UsedAt) >= c.cleanInterval {
+		if c.cleanCtx.Err() == nil && time.Since(item.UsedAt) >= c.ttl {
 			// remove the item because it is older and cleaning is going on
 			var zero T
 			return zero, false
@@ -178,4 +184,9 @@ func (c *LruCache[K, T]) Put(key K, val T) {
 	} else {
 		c.items = append(c.items, item) // if capacity is not full, append the item
 	}
+}
+
+func (c *LruCache[K, T]) Display() {
+	buf, _ := json.Marshal(c.items)
+	fmt.Println(string(buf))
 }
