@@ -94,28 +94,77 @@ func randSeq(n int) string {
 }
 
 func BenchmarkCache(b *testing.B) {
-	lruCache := NewCache[string, string](1000, 3*time.Second)
-	lruCache.Put("foo", "bar")
-	for i := 0; i < b.N; i++ {
+	b.Run("bench cache gets", func(b *testing.B) {
+		testcases := []testcase{
+			{
+				key: "foo",
+				val: "bar",
+			},
+			{
+				key: "foo1",
+				val: "bar1",
+			},
+			{
+				key: "foo2",
+				val: "bar2",
+			},
+			{
+				key: "foo3",
+				val: "bar3",
+			},
+		}
+		lruCache := NewCache[string, string](100000, 20*time.Second)
+		start := time.Now()
+		lruCache.Put("fizz", "buzz")
+		for _, tc := range testcases {
+			lruCache.Put(tc.key, tc.val)
+		}
 		rand.Seed(time.Now().UnixMilli())
-		k, v := randSeq(5), randSeq(5)
-		lruCache.Put(k, v)
-	}
-	lruCache.Put("foo1", "bar1")
-	val, ok := lruCache.Get("foo1")
-	if !ok {
-		b.Errorf("key \"%s\" should be present", "foo1")
-	}
-	if val != "bar1" {
-		b.Errorf("wanted %s but got %s for key %s", "bar1", val, "foo1")
-	}
-	time.Sleep(3 * time.Second)
-	_, ok = lruCache.Get("foo")
-	if ok {
-		b.Errorf("key \"%s\" should not be present", "foo")
-	}
-	_, ok = lruCache.Get("foo1")
-	if ok {
-		b.Errorf("key \"%s\" should not be present", "foo1")
-	}
+		for i := 0; i < 10000; i++ {
+			k, v := randSeq(5), randSeq(5)
+			lruCache.Put(k, v)
+			if i%5000 == 0 {
+				lruCache.Put("foo", "bar")
+			}
+		}
+		var j int
+		for i := 0; i < 100000; i++ {
+			_, _ = lruCache.Get(testcases[j].key)
+			j++
+			j = j % len(testcases)
+		}
+
+		elapsed := time.Since(start)
+		if elapsed < 20*time.Second {
+
+			j = 0
+			for i := 0; i < b.N; i++ {
+				val, ok := lruCache.Get(testcases[j].key)
+				if !ok {
+					b.Errorf("key \"%s\" should be present", testcases[j].key)
+				}
+				if val != testcases[j].val {
+					b.Errorf("wanted %s but got \"%s\" for key %s", testcases[j].val, val, testcases[j].key)
+				}
+				j++
+				j = j % len(testcases)
+			}
+		}
+		time.Sleep(20 * time.Second)
+		if _, ok := lruCache.Get("fizz"); ok {
+			b.Errorf("key \"%s\" should not be present", "fizz")
+		}
+		lruCache.Put("foo1", "bar1")
+		val, ok := lruCache.Get("foo1")
+		if !ok {
+			b.Errorf("key \"%s\" should be present", "foo1")
+		}
+		if val != "bar1" {
+			b.Errorf("wanted %s but got %s for key %s", "bar1", val, "foo1")
+		}
+		_, ok = lruCache.Get("foo")
+		if ok {
+			b.Errorf("key \"%s\" should not be present", "foo")
+		}
+	})
 }

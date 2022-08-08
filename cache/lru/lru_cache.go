@@ -2,7 +2,6 @@ package lru
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"runtime"
 	"sync"
@@ -23,17 +22,17 @@ type LruCache[K constraints.Ordered, V any] struct {
 	cleanCtx    context.Context
 	cleanCancel context.CancelFunc
 
-	cap   int
-	items []*item[K, V]
-	ttl   time.Duration
+	capacity int
+	items    []*item[K, V]
+	ttl      time.Duration
 }
 
 func NewCache[K constraints.Ordered, V any](cacheSize int, cacheItemTtl time.Duration) *LruCache[K, V] {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &LruCache[K, V]{
-		cap:   cacheSize,
-		items: make([]*item[K, V], 0),
-		ttl:   cacheItemTtl,
+		capacity: cacheSize,
+		items:    make([]*item[K, V], 0),
+		ttl:      cacheItemTtl,
 
 		cleanCtx:    ctx,
 		cleanCancel: cancel,
@@ -144,7 +143,6 @@ func (c *LruCache[K, T]) Get(key K) (T, bool) {
 	}
 
 	at, doesexist := exists(key, c)
-	fmt.Println(at, doesexist, key)
 	if doesexist {
 		item := c.items[at]
 		c.items = removeAt(c.items, at)
@@ -168,6 +166,7 @@ func (c *LruCache[K, T]) Put(key K, val T) {
 		item := c.items[at]
 		c.items = removeAt(c.items, at) // remove from index at
 		item.UsedAt = time.Now()        // update the used at for the accessed item
+		item.Val = val                  // update the val of the existing key
 		c.items = append(c.items, item) // append the removed item to the items so it becomes the last one
 		return
 	}
@@ -178,7 +177,7 @@ func (c *LruCache[K, T]) Put(key K, val T) {
 		val,
 		time.Now(),
 	}
-	if len(c.items) == c.cap { // if the capacity is reached the specified limit, remove the first(zero'th) item and append the new item
+	if len(c.items) == c.capacity { // if the capacity is reached the specified limit, remove the first(zero'th) item and append the new item
 		c.items = append(removeAt(c.items, 0), item)
 	} else {
 		c.items = append(c.items, item) // if capacity is not full, append the item

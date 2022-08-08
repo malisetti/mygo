@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"context"
 	"math"
 	"runtime"
 )
@@ -17,7 +16,7 @@ func ExistsAt[T any](xs []T, compare CompareFunc[T]) (int, bool) {
 	slices := int(math.Ceil(float64(n) / float64(size)))
 	result := make(chan *int, slices)
 	var j int
-	ctx, cancel := context.WithCancel(context.Background())
+	// ctx, cancel := context.WithCancel(context.Background())
 	for i := 0; i < n; i += size {
 		j += size
 		if j > n {
@@ -25,7 +24,7 @@ func ExistsAt[T any](xs []T, compare CompareFunc[T]) (int, bool) {
 		}
 		go func(x, y int) {
 			cpart := xs[x:y]
-			for i, n := 0, len(cpart); i < n && ctx.Err() == nil; i++ {
+			for i, n := 0, len(cpart); i < n; i++ {
 				e := cpart[i]
 				if compare(e) {
 					exitsAt := x + i
@@ -36,7 +35,7 @@ func ExistsAt[T any](xs []T, compare CompareFunc[T]) (int, bool) {
 			result <- nil
 		}(i, j)
 	}
-	defer cancel()
+	// defer cancel()
 	for i := 0; i < slices; i++ {
 		v := <-result
 		if v != nil {
