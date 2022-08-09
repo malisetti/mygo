@@ -45,6 +45,9 @@ const cleanInterval = 1 * time.Second
 
 func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 	ontick := func(tick time.Time) {
+		if time.Since(tick) >= cleanInterval {
+			return
+		}
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		n := len(c.items)
