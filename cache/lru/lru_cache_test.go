@@ -83,14 +83,13 @@ func TestCache(t *testing.T) {
 		}
 	})
 
-	var wg sync.WaitGroup
 	t.Run("test concurrent cache usage", func(t *testing.T) {
 		lru := NewCache[int, int](1000, 10*time.Second)
 		for i := 0; i < 1000; i++ {
 			lru.Put(1000, 1000)
 		}
+		var wg sync.WaitGroup
 		wg.Add(2)
-
 		FreqAccess := func() {
 			defer wg.Done()
 			for i := 0; i < 1000; i++ {
