@@ -41,15 +41,17 @@ func NewCache[K constraints.Ordered, V any](cacheSize int, cacheItemTtl time.Dur
 	return c
 }
 
-const cleanInterval = 1 * time.Second
+const cleanInterval = 10 * time.Second
 
 func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 	ontick := func(tick time.Time) {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+
 		if time.Since(tick) >= cleanInterval {
 			return
 		}
-		c.mu.Lock()
-		defer c.mu.Unlock()
+
 		n := len(c.items)
 		if n == 0 {
 			return
@@ -59,6 +61,8 @@ func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 		newCacheItems := make([][]*item[K, V], noSlices)
 		var j int
 		var wg sync.WaitGroup
+		cleanerCtx, cancel := context.WithTimeout(c.cleanCtx, c.ttl)
+		defer cancel()
 		for i := 0; i < n; i += size {
 			j += size
 			if j > n {
@@ -67,17 +71,17 @@ func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 			wg.Add(1)
 			go func(x, y int) {
 				defer wg.Done()
-				if c.cleanCtx.Err() == nil {
+				if cleanerCtx.Err() == nil {
 					return
 				}
 				itemSlice := make([]*item[K, V], 0)
 				copy(itemSlice, c.items[x:y])
-				for i, n := 0, len(itemSlice); i < n && c.cleanCtx.Err() == nil; i++ {
+				for i, n := 0, len(itemSlice); i < n && cleanerCtx.Err() == nil; i++ {
 					if time.Since(itemSlice[i].UsedAt) >= c.ttl {
 						itemSlice = removeAt(itemSlice, i)
 					}
 				}
-				if c.cleanCtx.Err() == nil {
+				if cleanerCtx.Err() == nil {
 					return
 				}
 				newCacheItems[int(math.Ceil(float64(x)/float64(size)))] = itemSlice
@@ -88,7 +92,7 @@ func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 		for _, v := range newCacheItems {
 			output = append(output, v...) // flatten the 2d items to 1d
 		}
-		if c.cleanCtx.Err() == nil {
+		if cleanerCtx.Err() == nil {
 			return
 		}
 		c.items = output

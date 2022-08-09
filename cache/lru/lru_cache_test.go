@@ -2,6 +2,7 @@ package lru
 
 import (
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 )
@@ -81,6 +82,42 @@ func TestCache(t *testing.T) {
 			}
 		}
 	})
+
+	var wg sync.WaitGroup
+	t.Run("test concurrent cache usage", func(t *testing.T) {
+		lru := NewCache[int, int](1000, 10*time.Second)
+		for i := 0; i < 1000; i++ {
+			lru.Put(1000, 1000)
+		}
+		wg.Add(2)
+
+		FreqAccess := func() {
+			defer wg.Done()
+			for i := 0; i < 1000; i++ {
+				wg.Add(1)
+				i := i
+				go func() {
+					defer wg.Done()
+					lru.Get(i)
+				}()
+			}
+		}
+		FreqWrite := func() {
+			defer wg.Done()
+			for i := 0; i < 1000; i++ {
+				wg.Add(1)
+				i := i
+				go func() {
+					defer wg.Done()
+					lru.Put(i, i)
+				}()
+			}
+		}
+
+		go FreqAccess()
+		go FreqWrite()
+		wg.Wait()
+	})
 }
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -113,7 +150,8 @@ func BenchmarkCache(b *testing.B) {
 				val: "bar3",
 			},
 		}
-		lruCache := NewCache[string, string](100000, 20*time.Second)
+		cacheTtl := 10 * time.Second
+		lruCache := NewCache[string, string](1000000, cacheTtl)
 		start := time.Now()
 		lruCache.Put("fizz", "buzz")
 		for _, tc := range testcases {
@@ -128,15 +166,14 @@ func BenchmarkCache(b *testing.B) {
 			}
 		}
 		var j int
-		for i := 0; i < 100000; i++ {
+		for i := 0; i < 1000000; i++ {
 			_, _ = lruCache.Get(testcases[j].key)
 			j++
 			j = j % len(testcases)
 		}
 
 		elapsed := time.Since(start)
-		if elapsed < 20*time.Second {
-
+		if elapsed < cacheTtl {
 			j = 0
 			for i := 0; i < b.N; i++ {
 				val, ok := lruCache.Get(testcases[j].key)
@@ -150,7 +187,7 @@ func BenchmarkCache(b *testing.B) {
 				j = j % len(testcases)
 			}
 		}
-		time.Sleep(20 * time.Second)
+		time.Sleep(cacheTtl)
 		if _, ok := lruCache.Get("fizz"); ok {
 			b.Errorf("key \"%s\" should not be present", "fizz")
 		}
