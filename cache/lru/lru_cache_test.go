@@ -90,7 +90,7 @@ func TestCache(t *testing.T) {
 		}
 		var wg sync.WaitGroup
 		wg.Add(2)
-		FreqAccess := func() {
+		freqAccess := func() {
 			defer wg.Done()
 			for i := 0; i < 1000; i++ {
 				wg.Add(1)
@@ -101,7 +101,7 @@ func TestCache(t *testing.T) {
 				}()
 			}
 		}
-		FreqWrite := func() {
+		freqWrite := func() {
 			defer wg.Done()
 			for i := 0; i < 1000; i++ {
 				wg.Add(1)
@@ -113,8 +113,8 @@ func TestCache(t *testing.T) {
 			}
 		}
 
-		go FreqAccess()
-		go FreqWrite()
+		go freqAccess()
+		go freqWrite()
 		wg.Wait()
 	})
 }
@@ -157,7 +157,7 @@ func BenchmarkCache(b *testing.B) {
 			lruCache.Put(tc.key, tc.val)
 		}
 		rand.Seed(time.Now().UnixMilli())
-		for i := 0; i < 10000; i++ {
+		for i := 0; i < 100000; i++ {
 			k, v := randSeq(5), randSeq(5)
 			lruCache.Put(k, v)
 			if i%5000 == 0 {
