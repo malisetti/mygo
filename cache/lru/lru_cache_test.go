@@ -157,20 +157,15 @@ func BenchmarkCache(b *testing.B) {
 			lruCache.Put(tc.key, tc.val)
 		}
 		rand.Seed(time.Now().UnixMilli())
-		for i := 0; i < 100000; i++ {
+		for i := 0; i < b.N; i++ {
 			k, v := randSeq(5), randSeq(5)
 			lruCache.Put(k, v)
 			if i%5000 == 0 {
 				lruCache.Put("foo", "bar")
 			}
 		}
-		var j int
-		for i := 0; i < 1000000; i++ {
-			_, _ = lruCache.Get(testcases[j].key)
-			j++
-			j = j % len(testcases)
-		}
 
+		var j int
 		elapsed := time.Since(start)
 		if elapsed < cacheTtl {
 			j = 0
