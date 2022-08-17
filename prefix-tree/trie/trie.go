@@ -85,7 +85,7 @@ func words[V constraints.Ordered](root *node[V], xs []V) []V {
 
 type StringRep[V constraints.Ordered] func(V) string
 
-func DumpDot[V constraints.Ordered](rootc V, trie *Trie[V], stringRep func(V) string) {
+func DumpDot[V constraints.Ordered](rootc V, trie *Trie[V], stringRep StringRep[V]) {
 	var dump func(V, *node[V])
 	dump = func(from V, node *node[V]) {
 		var keys []V
