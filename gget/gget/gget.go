@@ -6,6 +6,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -77,9 +78,25 @@ func Download(ctx context.Context, r io.Reader, routines int, outdir string) err
 							return
 						}
 					}()
-					h := md5.New()
-					io.WriteString(h, link)
-					path := filepath.Join(outdir, fmt.Sprintf("%x", h.Sum(nil)))
+					cd := resp.Header.Get("Content-Disposition")
+					mediatype, params, err := mime.ParseMediaType(cd)
+					_ = mediatype
+					var filename string
+					if err == nil {
+						filename = params["filename"]
+					} else {
+						h := md5.New()
+						io.WriteString(h, link)
+						filename = fmt.Sprintf("%x", h.Sum(nil))
+						ct := resp.Header.Get("Content-Type")
+						if ct != "" {
+							exts, err := mime.ExtensionsByType(ct)
+							if err == nil {
+								filename = fmt.Sprintf("%x%s", h.Sum(nil), exts[0])
+							}
+						}
+					}
+					path := filepath.Join(outdir, filename)
 					f, err := os.Create(path)
 					if err != nil {
 						errchan <- fmt.Errorf("file create %s failed with %v", path, err)
