@@ -9,4 +9,4 @@ const (
 )
 
 type String[V any] func(V) string
-type Compare[T any] func(x T) CompareRelation
+type Compare[V any] func(V) CompareRelation
