@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 	arrayutils "utils/array"
-	utils "utils/type"
+	typeutils "utils/type"
 
 	"golang.org/x/exp/constraints"
 )
@@ -111,14 +111,14 @@ func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 }
 
 func exists[K constraints.Ordered, V any](key K, c *LruCache[K, V]) (int, bool) {
-	return arrayutils.ExistsAt(c.items, func(x *item[K, V]) utils.CompareRelation {
+	return arrayutils.ExistsAt(c.items, func(x *item[K, V]) typeutils.CompareRelation {
 		switch {
 		case x.Key == key:
-			return utils.Equal
+			return typeutils.Equal
 		case x.Key < key:
-			return utils.Lesser
+			return typeutils.Lesser
 		default:
-			return utils.Greater
+			return typeutils.Greater
 		}
 	})
 }
