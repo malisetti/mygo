@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,11 +27,12 @@ func Download(ctx context.Context, r io.Reader, routines int, outdir string) err
 				return
 			default:
 				if scanner.Scan() {
-					url := strings.TrimSpace(scanner.Text())
-					if url == "" {
+					link := strings.TrimSpace(scanner.Text())
+					_, err := url.ParseRequestURI(link)
+					if err != nil {
 						continue
 					}
-					links <- url
+					links <- link
 				} else {
 					err := scanner.Err()
 					if err != nil {
