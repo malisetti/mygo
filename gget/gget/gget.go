@@ -15,7 +15,11 @@ import (
 	"sync"
 )
 
-func Download(ctx context.Context, r io.Reader, routines int, outdir string) error {
+func Get(ctx context.Context, r io.Reader, routines int, outdir string) error {
+	_, err := os.ReadDir(outdir)
+	if err != nil {
+		return err
+	}
 	errchan := make(chan error)
 	links := make(chan string)
 	go func() {

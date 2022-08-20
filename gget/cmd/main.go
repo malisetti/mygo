@@ -31,7 +31,7 @@ func main() {
 		cancel()
 	}()
 
-	err := gget.Download(appCtx, os.Stdin, routines, outDir)
+	err := gget.Get(appCtx, os.Stdin, routines, outDir)
 	if err != nil {
 		fmt.Printf("error while downloding: %v\n", err)
 	}
