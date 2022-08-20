@@ -14,9 +14,8 @@ func main() {
 	}
 
 	fmt.Printf("digraph trie {\n")
-	var stringRep prefixtree.StringRep[rune] = func(r rune) string {
+	prefixtree.DumpDot('_', trie, func(r rune) string {
 		return string(r)
-	}
-	prefixtree.DumpDot('_', trie, stringRep)
+	})
 	fmt.Printf("}\n")
 }

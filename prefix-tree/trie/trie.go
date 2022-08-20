@@ -3,6 +3,7 @@ package trie
 import (
 	"fmt"
 	"sort"
+	typeutils "utils/type"
 
 	"golang.org/x/exp/constraints"
 )
@@ -83,9 +84,7 @@ func words[V constraints.Ordered](root *node[V], xs []V) []V {
 	return words
 }
 
-type StringRep[V constraints.Ordered] func(V) string
-
-func DumpDot[V constraints.Ordered](rootc V, trie *Trie[V], stringRep StringRep[V]) {
+func DumpDot[V constraints.Ordered](rootc V, trie *Trie[V], stringRep typeutils.String[V]) {
 	var dump func(V, *node[V])
 	dump = func(from V, node *node[V]) {
 		var keys []V

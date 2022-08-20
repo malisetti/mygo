@@ -3,11 +3,11 @@ package utils
 import (
 	"math"
 	"runtime"
+	typeutils "utils/type"
+	utils "utils/type"
 )
 
-type CompareFunc[T any] func(x T) bool
-
-func ExistsAt[T any](xs []T, compare CompareFunc[T]) (int, bool) {
+func ExistsAt[T any](xs []T, compare typeutils.Compare[T]) (int, bool) {
 	n := len(xs)
 	if n == 0 {
 		return 0, false
@@ -26,7 +26,7 @@ func ExistsAt[T any](xs []T, compare CompareFunc[T]) (int, bool) {
 			cpart := xs[x:y]
 			for i, n := 0, len(cpart); i < n; i++ {
 				e := cpart[i]
-				if compare(e) {
+				if compare(e) == utils.Equal {
 					exitsAt := x + i
 					result <- &exitsAt
 					return
