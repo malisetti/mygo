@@ -3,7 +3,7 @@ package trie
 import (
 	"fmt"
 	"sort"
-	typeutils "utils/type"
+	"utils/typeutils"
 
 	"golang.org/x/exp/constraints"
 )

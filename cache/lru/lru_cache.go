@@ -6,8 +6,8 @@ import (
 	"runtime"
 	"sync"
 	"time"
-	arrayutils "utils/array"
-	typeutils "utils/type"
+	"utils/arrayutils"
+	"utils/typeutils"
 
 	"golang.org/x/exp/constraints"
 )

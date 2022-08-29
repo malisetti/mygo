@@ -1,9 +1,9 @@
-package utils
+package arrayutils
 
 import (
 	"math"
 	"runtime"
-	typeutils "utils/type"
+	"utils/typeutils"
 )
 
 func ExistsAt[T any](xs []T, compare typeutils.Compare[T]) (int, bool) {
