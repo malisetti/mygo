@@ -43,3 +43,7 @@ func ExistsAt[T any](xs []T, compare typeutils.Compare[T]) (int, bool) {
 	}
 	return 0, false
 }
+
+func RemoveAt[V any](xs []V, i int) []V {
+	return append(xs[:i], xs[i+1:]...)
+}

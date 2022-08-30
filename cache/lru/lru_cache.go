@@ -79,7 +79,7 @@ func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 				copy(itemSlice, c.items[x:y])
 				for i, n := 0, len(itemSlice); i < n && cleanerCtx.Err() == nil; i++ {
 					if time.Since(itemSlice[i].UsedAt) >= c.ttl {
-						itemSlice = removeAt(itemSlice, i)
+						itemSlice = arrayutils.RemoveAt(itemSlice, i)
 					}
 				}
 				if cleanerCtx.Err() == nil {
@@ -123,10 +123,6 @@ func exists[K constraints.Ordered, V any](key K, c *LruCache[K, V]) (int, bool) 
 	})
 }
 
-func removeAt[V any](xs []V, i int) []V {
-	return append(xs[:i], xs[i+1:]...)
-}
-
 func (c *LruCache[K, T]) PauseCleaning() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -159,7 +155,7 @@ func (c *LruCache[K, T]) Get(key K) (T, bool) {
 	at, doesexist := exists(key, c)
 	if doesexist {
 		item := c.items[at]
-		c.items = removeAt(c.items, at)
+		c.items = arrayutils.RemoveAt(c.items, at)
 		if c.cleanCtx.Err() == nil && time.Since(item.UsedAt) >= c.ttl {
 			// remove the item because it is older and cleaning is going on
 			var zero T
@@ -178,10 +174,10 @@ func (c *LruCache[K, T]) Put(key K, val T) {
 	defer c.mu.Unlock()
 	if at, doesexist := exists(key, c); doesexist {
 		item := c.items[at]
-		c.items = removeAt(c.items, at) // remove from index at
-		item.UsedAt = time.Now()        // update the used at for the accessed item
-		item.Val = val                  // update the val of the existing key
-		c.items = append(c.items, item) // append the removed item to the items so it becomes the last one
+		c.items = arrayutils.RemoveAt(c.items, at) // remove from index at
+		item.UsedAt = time.Now()                   // update the used at for the accessed item
+		item.Val = val                             // update the val of the existing key
+		c.items = append(c.items, item)            // append the removed item to the items so it becomes the last one
 		return
 	}
 
@@ -192,7 +188,7 @@ func (c *LruCache[K, T]) Put(key K, val T) {
 		time.Now(),
 	}
 	if len(c.items) == c.capacity { // if the capacity is reached the specified limit, remove the first(zero'th) item and append the new item
-		c.items = append(removeAt(c.items, 0), item)
+		c.items = append(arrayutils.RemoveAt(c.items, 0), item)
 	} else {
 		c.items = append(c.items, item) // if capacity is not full, append the item
 	}

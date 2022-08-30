@@ -6,14 +6,6 @@ import (
 )
 
 func main() {
-	c := calendar.New()
-	if !c.IsWeekend() {
-		panic("today is weekend")
-	}
-	const today = "2022-28-08"
-	if x := c.Today(); x != today {
-		fmt.Printf("wanted %s but got %s", today, x)
-	}
-
-	fmt.Println(c.Day())
+	x := calendar.Day(2022, 0, 0, 6, 2023, 1, 9)
+	fmt.Println(x)
 }
