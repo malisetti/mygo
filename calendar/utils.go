@@ -22,9 +22,47 @@ func DaysInMonth(year, month int) int {
 	return monthNdays[months[month]][0]
 }
 
-func DaysBtwDates(y0, m0, d0, y1, m1, d1 int) int {
+func CompareDates(y0, m0, d0, y1, m1, d1 int) int {
+	y0v := y0*100 + m0*10 + d0
+	y1v := y1*100 + m1*10 + d1
+
+	if y0v == y1v {
+		return 0
+	}
+
+	if y0v < y1v {
+		return -1
+	}
+
+	return 1
+}
+
+func DaysBtwDates(y0, m0, d0, y1, m1, d1 int) (int, int) {
+	var x, xm, xd, y, ym, yd int
+	cv := CompareDates(y0, m0, d0, y1, m1, d1)
+	switch cv {
+	case -1:
+		x = y0
+		xm = m0
+		xd = d0
+
+		y = y1
+		ym = m1
+		yd = d1
+	case 1:
+		x = y1
+		xm = m1
+		xd = d1
+
+		y = y0
+		ym = m0
+		yd = d0
+	default:
+		return 0, cv
+	}
+
 	days := 0
-	for i := y0; i < y1; i++ {
+	for i := x; i < y; i++ {
 		days += 365
 		if IsLeap(i) {
 			days += 1
@@ -32,16 +70,16 @@ func DaysBtwDates(y0, m0, d0, y1, m1, d1 int) int {
 	}
 
 	for i := 0; i < len(months); i++ {
-		if m0 > i {
-			days -= DaysInMonth(y0, i)
+		if xm > i {
+			days -= DaysInMonth(x, i)
 		}
-		if m1 > i {
-			days += DaysInMonth(y1, i)
+		if ym > i {
+			days += DaysInMonth(y, i)
 		}
 	}
 
-	days -= d0
-	days += d1
+	days -= xd
+	days += yd
 
-	return days
+	return days, cv
 }
