@@ -1,10 +1,7 @@
 package calendar
 
-import "fmt"
-
 func Day(y0, m0, d0, dd, y1, m1, d1 int) string {
 	n, c := DaysBtwDates(y0, m0, d0, y1, m1, d1)
-	fmt.Println(n)
 	switch c {
 	case -1:
 		cd := append(days[dd:], days[:dd]...)
