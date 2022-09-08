@@ -15,6 +15,7 @@ type node[K constraints.Ordered, V any] struct {
 	usedAt time.Time
 }
 
+// Cache is a LRU cache which is concurrent safe
 type Cache[K constraints.Ordered, V any] struct {
 	mu          sync.Mutex
 	cleanCtx    context.Context
@@ -26,6 +27,7 @@ type Cache[K constraints.Ordered, V any] struct {
 	ttl      time.Duration
 }
 
+// NewCache returns a lru cache with given cache size and cache item ttl
 func NewCache[K constraints.Ordered, V any](cacheSize int, cacheItemTtl time.Duration) *Cache[K, V] {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &Cache[K, V]{
@@ -45,10 +47,12 @@ const cleanInterval = 10 * time.Second
 
 func clean[K constraints.Ordered, V any](c *Cache[K, V]) {
 	ontick := func(tick time.Time) {
-		c.mu.Lock()
-		defer c.mu.Unlock()
 		ctx, cancel := context.WithTimeout(c.cleanCtx, cleanInterval)
 		defer cancel()
+
+		c.mu.Lock()
+		defer c.mu.Unlock()
+
 		for e := c.items.Front(); e != nil && ctx.Err() == nil; e = e.Next() {
 			item := e.Value.(*node[K, V])
 			if time.Since(item.usedAt) >= c.ttl {
@@ -74,12 +78,14 @@ func exists[K constraints.Ordered, V any](key K, c *Cache[K, V]) (*list.Element,
 	return i, ok
 }
 
+// PauseCleaning pauses the cleaning of cache items based on the ttl
 func (c *Cache[K, T]) PauseCleaning() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.cleanCancel()
 }
 
+// ResumeCleaning resumes the cleaning of cache items based on the ttl
 func (c *Cache[K, T]) ResumeCleaning() {
 	if c.cleanCtx.Err() == nil {
 		return
@@ -93,6 +99,7 @@ func (c *Cache[K, T]) ResumeCleaning() {
 	go clean(c)
 }
 
+// Get returns the value and existence of a given key k
 func (c *Cache[K, T]) Get(key K) (T, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -114,6 +121,7 @@ func (c *Cache[K, T]) Get(key K) (T, bool) {
 	return zero, false
 }
 
+// Put puts the given k, v in cache
 func (c *Cache[K, T]) Put(key K, val T) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -132,7 +140,6 @@ func (c *Cache[K, T]) Put(key K, val T) {
 		bval := c.items.Remove(c.items.Back())
 		delete(c.itemIdx, bval.(*node[K, T]).key)
 	}
-	// create new item to put it in the items
 	item := &node[K, T]{
 		key,
 		val,
