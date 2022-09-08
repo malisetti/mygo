@@ -53,7 +53,7 @@ func clean[K constraints.Ordered, V any](c *Cache[K, V]) {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 
-		for e := c.items.Front(); e != nil && ctx.Err() == nil; e = e.Next() {
+		for e := c.items.Back(); e != nil && ctx.Err() == nil; e = e.Prev() {
 			item := e.Value.(*node[K, V])
 			if time.Since(item.usedAt) >= c.ttl {
 				c.items.Remove(e)
