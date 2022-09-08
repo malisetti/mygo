@@ -7,12 +7,12 @@ import (
 	"time"
 )
 
-type testcase struct {
+type cacheItem struct {
 	key, val string
 }
 
 func TestCache(t *testing.T) {
-	testcases := []testcase{
+	testcases := []cacheItem{
 		{
 			key: "foo",
 			val: "bar",
@@ -131,7 +131,7 @@ func randSeq(n int) string {
 
 func BenchmarkCache(b *testing.B) {
 	b.Run("bench cache gets", func(b *testing.B) {
-		testcases := []testcase{
+		testcases := []cacheItem{
 			{
 				key: "foo",
 				val: "bar",
@@ -150,18 +150,18 @@ func BenchmarkCache(b *testing.B) {
 			},
 		}
 		cacheTtl := 10 * time.Second
-		lruCache := NewCache[string, string](10000000, cacheTtl)
+		cache := NewCache[string, string](10000000, cacheTtl)
 		start := time.Now()
-		lruCache.Put("fizz", "buzz")
+		cache.Put("fizz", "buzz")
 		for _, tc := range testcases {
-			lruCache.Put(tc.key, tc.val)
+			cache.Put(tc.key, tc.val)
 		}
 		rand.Seed(time.Now().UnixMilli())
 		for i := 0; i < b.N; i++ {
 			k, v := randSeq(5), randSeq(5)
-			lruCache.Put(k, v)
+			cache.Put(k, v)
 			if i%5000 == 0 {
-				lruCache.Put("foo", "bar")
+				cache.Put("foo", "bar")
 			}
 		}
 
@@ -170,7 +170,7 @@ func BenchmarkCache(b *testing.B) {
 		if elapsed < cacheTtl {
 			j = 0
 			for i := 0; i < b.N; i++ {
-				val, ok := lruCache.Get(testcases[j].key)
+				val, ok := cache.Get(testcases[j].key)
 				if !ok {
 					b.Errorf("key \"%s\" should be present", testcases[j].key)
 				}
@@ -182,18 +182,18 @@ func BenchmarkCache(b *testing.B) {
 			}
 		}
 		time.Sleep(cacheTtl)
-		if _, ok := lruCache.Get("fizz"); ok {
+		if _, ok := cache.Get("fizz"); ok {
 			b.Errorf("key \"%s\" should not be present", "fizz")
 		}
-		lruCache.Put("foo1", "bar1")
-		val, ok := lruCache.Get("foo1")
+		cache.Put("foo1", "bar1")
+		val, ok := cache.Get("foo1")
 		if !ok {
 			b.Errorf("key \"%s\" should be present", "foo1")
 		}
 		if val != "bar1" {
 			b.Errorf("wanted %s but got %s for key %s", "bar1", val, "foo1")
 		}
-		_, ok = lruCache.Get("foo")
+		_, ok = cache.Get("foo")
 		if ok {
 			b.Errorf("key \"%s\" should not be present", "foo")
 		}

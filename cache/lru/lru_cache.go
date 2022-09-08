@@ -47,12 +47,9 @@ func clean[K constraints.Ordered, V any](c *Cache[K, V]) {
 	ontick := func(tick time.Time) {
 		c.mu.Lock()
 		defer c.mu.Unlock()
-
-		if time.Since(tick) >= cleanInterval {
-			return
-		}
-
-		for e := c.items.Front(); e != nil && c.cleanCtx.Err() == nil; e = e.Next() {
+		ctx, cancel := context.WithTimeout(c.cleanCtx, cleanInterval)
+		defer cancel()
+		for e := c.items.Front(); e != nil && ctx.Err() == nil; e = e.Next() {
 			item := e.Value.(*node[K, V])
 			if time.Since(item.usedAt) >= c.ttl {
 				c.items.Remove(e)
@@ -107,7 +104,8 @@ func (c *Cache[K, T]) Get(key K) (T, bool) {
 			var zero T
 			return zero, false
 		}
-		item.usedAt = time.Now() // update the item's used at to now and add it to the front of items
+		// update the item's used at to now and add it to the front of items
+		item.usedAt = time.Now()
 		c.itemIdx[item.key] = c.items.PushFront(item)
 
 		return item.val, true
@@ -123,21 +121,22 @@ func (c *Cache[K, T]) Put(key K, val T) {
 		item := el.Value.(*node[K, T])
 		c.items.Remove(el)
 
-		item.usedAt = time.Now() // update the used at for the accessed item
-		item.val = val           // update the val of the existing key
+		item.usedAt = time.Now()
+		item.val = val
 		c.itemIdx[item.key] = c.items.PushFront(item)
 		return
 	}
 
+	// if the capacity is reached the specified limit, remove the last item and add the new item to front
+	if c.items.Len() == c.capacity {
+		bval := c.items.Remove(c.items.Back())
+		delete(c.itemIdx, bval.(*node[K, T]).key)
+	}
 	// create new item to put it in the items
 	item := &node[K, T]{
 		key,
 		val,
 		time.Now(),
-	}
-	if c.items.Len() == c.capacity { // if the capacity is reached the specified limit, remove the last item and add the new item to front
-		bval := c.items.Remove(c.items.Back())
-		delete(c.itemIdx, bval.(*node[K, T]).key)
 	}
 	c.itemIdx[item.key] = c.items.PushFront(item)
 }
