@@ -1,38 +1,37 @@
 package lru
 
 import (
+	"container/list"
 	"context"
-	"math"
-	"runtime"
 	"sync"
 	"time"
-	"utils/arrayutils"
-	"utils/typeutils"
 
 	"golang.org/x/exp/constraints"
 )
 
-type item[K constraints.Ordered, V any] struct {
-	Key    K
-	Val    V
-	UsedAt time.Time
+type node[K constraints.Ordered, V any] struct {
+	key    K
+	val    V
+	usedAt time.Time
 }
 
-type LruCache[K constraints.Ordered, V any] struct {
+type Cache[K constraints.Ordered, V any] struct {
 	mu          sync.Mutex
 	cleanCtx    context.Context
 	cleanCancel context.CancelFunc
 
 	capacity int
-	items    []*item[K, V]
+	items    *list.List
+	itemIdx  map[K]*list.Element
 	ttl      time.Duration
 }
 
-func NewCache[K constraints.Ordered, V any](cacheSize int, cacheItemTtl time.Duration) *LruCache[K, V] {
+func NewCache[K constraints.Ordered, V any](cacheSize int, cacheItemTtl time.Duration) *Cache[K, V] {
 	ctx, cancel := context.WithCancel(context.Background())
-	c := &LruCache[K, V]{
+	c := &Cache[K, V]{
 		capacity: cacheSize,
-		items:    make([]*item[K, V], 0),
+		items:    list.New(),
+		itemIdx:  make(map[K]*list.Element),
 		ttl:      cacheItemTtl,
 
 		cleanCtx:    ctx,
@@ -44,7 +43,7 @@ func NewCache[K constraints.Ordered, V any](cacheSize int, cacheItemTtl time.Dur
 
 const cleanInterval = 10 * time.Second
 
-func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
+func clean[K constraints.Ordered, V any](c *Cache[K, V]) {
 	ontick := func(tick time.Time) {
 		c.mu.Lock()
 		defer c.mu.Unlock()
@@ -53,50 +52,13 @@ func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 			return
 		}
 
-		n := len(c.items)
-		if n == 0 {
-			return
-		}
-		size := int(math.Ceil(float64(n) / float64(runtime.NumCPU())))
-		noSlices := int(math.Ceil(float64(n) / float64(size)))
-		newCacheItems := make([][]*item[K, V], noSlices)
-		var j int
-		var wg sync.WaitGroup
-		cleanerCtx, cancel := context.WithTimeout(c.cleanCtx, c.ttl)
-		defer cancel()
-		for i := 0; i < n; i += size {
-			j += size
-			if j > n {
-				j = n
+		for e := c.items.Front(); e != nil && c.cleanCtx.Err() == nil; e = e.Next() {
+			item := e.Value.(*node[K, V])
+			if time.Since(item.usedAt) >= c.ttl {
+				c.items.Remove(e)
+				delete(c.itemIdx, item.key)
 			}
-			wg.Add(1)
-			go func(x, y int) {
-				defer wg.Done()
-				if cleanerCtx.Err() == nil {
-					return
-				}
-				itemSlice := make([]*item[K, V], 0)
-				copy(itemSlice, c.items[x:y])
-				for i, n := 0, len(itemSlice); i < n && cleanerCtx.Err() == nil; i++ {
-					if time.Since(itemSlice[i].UsedAt) >= c.ttl {
-						itemSlice = arrayutils.RemoveAt(itemSlice, i)
-					}
-				}
-				if cleanerCtx.Err() == nil {
-					return
-				}
-				newCacheItems[int(math.Ceil(float64(x)/float64(size)))] = itemSlice
-			}(i, j)
 		}
-		wg.Wait()
-		var output []*item[K, V]
-		for _, v := range newCacheItems {
-			output = append(output, v...) // flatten the 2d items to 1d
-		}
-		if cleanerCtx.Err() == nil {
-			return
-		}
-		c.items = output
 	}
 
 	ticker := time.NewTicker(cleanInterval)
@@ -110,26 +72,18 @@ func clean[K constraints.Ordered, V any](c *LruCache[K, V]) {
 	}
 }
 
-func exists[K constraints.Ordered, V any](key K, c *LruCache[K, V]) (int, bool) {
-	return arrayutils.ExistsAt(c.items, func(x *item[K, V]) typeutils.CompareRelation {
-		switch {
-		case x.Key == key:
-			return typeutils.Equal
-		case x.Key < key:
-			return typeutils.Lesser
-		default:
-			return typeutils.Greater
-		}
-	})
+func exists[K constraints.Ordered, V any](key K, c *Cache[K, V]) (*list.Element, bool) {
+	i, ok := c.itemIdx[key]
+	return i, ok
 }
 
-func (c *LruCache[K, T]) PauseCleaning() {
+func (c *Cache[K, T]) PauseCleaning() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.cleanCancel()
 }
 
-func (c *LruCache[K, T]) ResumeCleaning() {
+func (c *Cache[K, T]) ResumeCleaning() {
 	if c.cleanCtx.Err() == nil {
 		return
 	}
@@ -142,54 +96,48 @@ func (c *LruCache[K, T]) ResumeCleaning() {
 	go clean(c)
 }
 
-func (c *LruCache[K, T]) Get(key K) (T, bool) {
+func (c *Cache[K, T]) Get(key K) (T, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	n := len(c.items)
-	if n == 0 {
-		var zero T
-		return zero, false
-	}
-
-	at, doesexist := exists(key, c)
-	if doesexist {
-		item := c.items[at]
-		c.items = arrayutils.RemoveAt(c.items, at)
-		if c.cleanCtx.Err() == nil && time.Since(item.UsedAt) >= c.ttl {
-			// remove the item because it is older and cleaning is going on
+	if el, doesexist := exists(key, c); doesexist {
+		item := el.Value.(*node[K, T])
+		c.items.Remove(el)
+		delete(c.itemIdx, item.key)
+		if time.Since(item.usedAt) >= c.ttl && c.cleanCtx.Err() == nil {
 			var zero T
 			return zero, false
 		}
-		item.UsedAt = time.Now() // update the item's used at to now and add it back to the items
-		c.items = append(c.items, item)
-		return item.Val, true
+		item.usedAt = time.Now() // update the item's used at to now and add it to the front of items
+		c.itemIdx[item.key] = c.items.PushFront(item)
+
+		return item.val, true
 	}
 	var zero T
 	return zero, false
 }
 
-func (c *LruCache[K, T]) Put(key K, val T) {
+func (c *Cache[K, T]) Put(key K, val T) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if at, doesexist := exists(key, c); doesexist {
-		item := c.items[at]
-		c.items = arrayutils.RemoveAt(c.items, at) // remove from index at
-		item.UsedAt = time.Now()                   // update the used at for the accessed item
-		item.Val = val                             // update the val of the existing key
-		c.items = append(c.items, item)            // append the removed item to the items so it becomes the last one
+	if el, doesexist := exists(key, c); doesexist {
+		item := el.Value.(*node[K, T])
+		c.items.Remove(el)
+
+		item.usedAt = time.Now() // update the used at for the accessed item
+		item.val = val           // update the val of the existing key
+		c.itemIdx[item.key] = c.items.PushFront(item)
 		return
 	}
 
 	// create new item to put it in the items
-	item := &item[K, T]{
+	item := &node[K, T]{
 		key,
 		val,
 		time.Now(),
 	}
-	if len(c.items) == c.capacity { // if the capacity is reached the specified limit, remove the first(zero'th) item and append the new item
-		c.items = append(arrayutils.RemoveAt(c.items, 0), item)
-	} else {
-		c.items = append(c.items, item) // if capacity is not full, append the item
+	if c.items.Len() == c.capacity { // if the capacity is reached the specified limit, remove the last item and add the new item to front
+		bval := c.items.Remove(c.items.Back())
+		delete(c.itemIdx, bval.(*node[K, T]).key)
 	}
+	c.itemIdx[item.key] = c.items.PushFront(item)
 }

@@ -150,7 +150,7 @@ func BenchmarkCache(b *testing.B) {
 			},
 		}
 		cacheTtl := 10 * time.Second
-		lruCache := NewCache[string, string](1000000, cacheTtl)
+		lruCache := NewCache[string, string](10000000, cacheTtl)
 		start := time.Now()
 		lruCache.Put("fizz", "buzz")
 		for _, tc := range testcases {
