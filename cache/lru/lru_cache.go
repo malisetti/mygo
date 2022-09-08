@@ -3,6 +3,7 @@ package lru
 import (
 	"container/list"
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -28,7 +29,13 @@ type Cache[K constraints.Ordered, V any] struct {
 }
 
 // NewCache returns a lru cache with given cache size and cache item ttl
-func NewCache[K constraints.Ordered, V any](cacheSize int, cacheItemTtl time.Duration) *Cache[K, V] {
+func NewCache[K constraints.Ordered, V any](cacheSize int, cacheItemTtl time.Duration) (*Cache[K, V], error) {
+	if cacheSize <= 0 {
+		return nil, fmt.Errorf("invalid cache size, must be greater than 0")
+	}
+	if cacheItemTtl <= 0 {
+		return nil, fmt.Errorf("invalid cache item ttl, must be greater than 0")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &Cache[K, V]{
 		capacity: cacheSize,
@@ -40,7 +47,7 @@ func NewCache[K constraints.Ordered, V any](cacheSize int, cacheItemTtl time.Dur
 		cleanCancel: cancel,
 	}
 	go clean(c)
-	return c
+	return c, nil
 }
 
 const cleanInterval = 10 * time.Second

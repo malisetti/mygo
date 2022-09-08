@@ -34,8 +34,11 @@ func TestCache(t *testing.T) {
 			val: "doe3",
 		},
 	}
-	lruCache := NewCache[string, string](5, 2*time.Second)
 	t.Run("test cache gets", func(t *testing.T) {
+		lruCache, err := NewCache[string, string](5, 2*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
 		for i := 0; i < len(testcases); i++ {
 			testcase := testcases[i]
 			lruCache.Put(testcase.key, testcase.val)
@@ -53,6 +56,10 @@ func TestCache(t *testing.T) {
 	})
 
 	t.Run("test cache size", func(t *testing.T) {
+		lruCache, err := NewCache[string, string](5, 2*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
 		for i := 0; i < len(testcases); i++ {
 			testcase := testcases[i]
 			lruCache.Put(testcase.key, testcase.val)
@@ -69,6 +76,10 @@ func TestCache(t *testing.T) {
 	})
 
 	t.Run("test cache ttl", func(t *testing.T) {
+		lruCache, err := NewCache[string, string](5, 2*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
 		for i := 0; i < len(testcases); i++ {
 			testcase := testcases[i]
 			lruCache.Put(testcase.key, testcase.val)
@@ -84,7 +95,10 @@ func TestCache(t *testing.T) {
 	})
 
 	t.Run("test concurrent cache usage", func(t *testing.T) {
-		lru := NewCache[int, int](1000, 10*time.Second)
+		lru, err := NewCache[int, int](1000, 10*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
 		for i := 0; i < 1000; i++ {
 			lru.Put(1000, 1000)
 		}
@@ -150,7 +164,10 @@ func BenchmarkCache(b *testing.B) {
 			},
 		}
 		cacheTtl := 10 * time.Second
-		cache := NewCache[string, string](10000000, cacheTtl)
+		cache, err := NewCache[string, string](10000000, cacheTtl)
+		if err != nil {
+			b.Fatal(err)
+		}
 		start := time.Now()
 		cache.Put("fizz", "buzz")
 		for _, tc := range testcases {
