@@ -1,0 +1,37 @@
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <script src="wasm_exec.js"></script>
+    <script>
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
+            go.run(result.instance);
+        });
+    </script>
+</head>
+<body>
+<div>
+    <label for="y">Y</label>
+    <input id="y" name="Year" type="number" min="0">
+    <label for="m">M</label>
+    <input id="m" name="Month" type="number" min="0">
+    <label for="d">D</label>
+    <input id="d" name="Date" type="number" min="0">
+</div>
+<div>
+    <button id="get-day">Get Day</button>
+</div>
+<div id="day" style="font-size: 20px"></div>
+<script>
+    const y = document.querySelector('#y')
+    const m = document.querySelector('#m')
+    const d = document.querySelector('#d')
+
+    const day = document.querySelector('#day')
+    const getDay = document.querySelector('#get-day')
+    getDay.addEventListener('click', function () {
+        day.innerHTML = Day(Number(y.value), Number(m.value), Number(d.value))
+    })
+</script>
+</body>
+</html>
